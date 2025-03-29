@@ -1,25 +1,58 @@
 import tkinter as tk
+from tkinter import Label, Button
+import cv2
+from PIL import Image, ImageTk
 
-class PosturiteApp:
+class PostureApp:
+    print("Script is running...")
+
     def __init__(self, root):
         self.root = root
-        self.root.title("Posturite - Posture Detection")
-        self.root.geometry("500x300")
+        self.root.title("Posture Checker")
+        self.root.geometry("800x600")
 
-        self.label = tk.Label(root, text="Welcome to Posturite!", font=("Arial", 14))
-        self.label.pack(pady=20)
+        self.label = Label(self.root)
+        self.label.pack()
 
-        self.status_label = tk.Label(root, text="Posture Status: Good", font=("Arial", 12), fg="green")
+        self.status_label = Label(self.root, text="Posture: Waiting...", font=("Arial", 16))
         self.status_label.pack(pady=10)
 
-        self.check_button = tk.Button(root, text="Check Posture", command=self.check_posture)
-        self.check_button.pack(pady=10)
+        self.start_btn = Button(self.root, text="Start Camera", command=self.start_camera)
+        self.start_btn.pack()
 
-    def check_posture(self):
-        # Placeholder function, will integrate posture detection later
-        self.status_label.config(text="Posture Status: Bad", fg="red")
+        self.cap = None
+        self.running = False
+
+    def start_camera(self):
+        if not self.running:
+            self.cap = cv2.VideoCapture(0)
+            self.running = True
+            self.update_frame()
+
+    def update_frame(self):
+        if self.cap and self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                frame = cv2.flip(frame, 1)
+                cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(cv2image)
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.label.imgtk = imgtk
+                self.label.configure(image=imgtk)
+
+                # TODO: Add AI analysis here later
+                self.status_label.config(text="Posture: Good ✅")  # Temporary placeholder
+
+            self.label.after(10, self.update_frame)
+
+    def on_close(self):
+        self.running = False
+        if self.cap:
+            self.cap.release()
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = PosturiteApp(root)
+    app = PostureApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()
