@@ -4,47 +4,48 @@ import cv2
 from PIL import Image, ImageTk
 
 class PostureApp:
-    print("Script is running...")
-
     def __init__(self, root):
         self.root = root
-        self.root.title("Posture Checker")
+        self.root.title("Posturite")
         self.root.geometry("800x600")
 
-        self.label = Label(self.root)
-        self.label.pack()
+        #Implement bg
+        bg = ImageTk.PhotoImage(file="images/Hoohacks-7.png")
+        background_label = tk.Label(root, image=bg)
+        background_label.image = bg
+        background_label.place(x=0, y=0, relwidth=1, relheight=1)
 
-        self.status_label = Label(self.root, text="Posture: Waiting...", font=("Arial", 16))
-        self.status_label.pack(pady=10)
+        ##Implement buttons
+        homeButton = tk.Button(
+            root, text="Home"
+        )
+        aboutButton = tk.Button(
+            root,
+            text="About",
+            background='#f8796a',
+            foreground="white",
+            activebackground='#ea786d',
+            activeforeground="white",
+            borderwidth = 0,
+            cursor='hand2'
+        )
+        contactButton = tk.Button(
+            root, text="Contact"
+        )
+        settingsButton = tk.Button(
+            root, text="Settings"
+        )
 
-        self.start_btn = Button(self.root, text="Start Camera", command=self.start_camera)
-        self.start_btn.pack()
+        aboutButton.place(relx=0.5, rely=0.5, anchor="center")
+
 
         self.cap = None
         self.running = False
 
-    def start_camera(self):
-        if not self.running:
-            self.cap = cv2.VideoCapture(0)
-            self.running = True
-            self.update_frame()
+    ## Function for clicking home and logo
+    ##def on_home(self):
 
-    def update_frame(self):
-        if self.cap and self.running:
-            ret, frame = self.cap.read()
-            if ret:
-                frame = cv2.flip(frame, 1)
-                cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                img = Image.fromarray(cv2image)
-                imgtk = ImageTk.PhotoImage(image=img)
-                self.label.imgtk = imgtk
-                self.label.configure(image=imgtk)
-
-                # TODO: Add AI analysis here later
-                self.status_label.config(text="Posture: Good ✅")  # Temporary placeholder
-
-            self.label.after(10, self.update_frame)
-
+    ## Function for closing app
     def on_close(self):
         self.running = False
         if self.cap:
