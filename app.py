@@ -1,5 +1,6 @@
 import tkinter as tk
 from PIL import Image, ImageTk
+import cv2
 
 class PosturiteApp(tk.Tk):
     def __init__(self):
@@ -12,7 +13,7 @@ class PosturiteApp(tk.Tk):
         self.bg_image = Image.open("Hoohacks-7.jpg").resize((1000, 700))
         self.bg_photo = ImageTk.PhotoImage(self.bg_image)
 
-        # Create canvas and place background image
+        # Canvas
         self.canvas = tk.Canvas(self, width=1000, height=700, highlightthickness=0)
         self.canvas_bg = self.canvas.create_image(0, 0, anchor="nw", image=self.bg_photo)
         self.canvas.pack()
@@ -21,18 +22,16 @@ class PosturiteApp(tk.Tk):
         self.title_text = self.canvas.create_text(40, 35, text="Posturite", fill="white",
                                                   font=("Helvetica", 20, "bold"), anchor="w")
 
-        # Settings label (top-right)
+        # Settings (top-right)
         self.settings_text = self.canvas.create_text(920, 35, text="Settings", fill="white",
                                                      font=("Helvetica", 14, "bold"), anchor="w")
 
-        # Dropdown settings panel (initially hidden)
+        # Dropdown menu for Settings
         self.dropdown = tk.Frame(self, bg="#1e1e1e", highlightbackground="white", highlightthickness=1)
         self.dropdown.place(x=850, y=50, width=130, height=60)
         self.dropdown.lower()
 
-        # Lockdown Mode toggle
         self.lockdown_var = tk.BooleanVar()
-
         label = tk.Label(self.dropdown, text="Lockdown Mode", bg="#1e1e1e", fg="white", font=("Helvetica", 10))
         label.pack(side="left", padx=(10, 5), pady=10)
 
@@ -41,14 +40,67 @@ class PosturiteApp(tk.Tk):
                                      highlightthickness=0, bd=0, command=self.on_lockdown_toggle)
         self.toggle.pack(side="right", padx=(5, 10))
 
-        # Bind hover behavior to show/hide dropdown
         self.canvas.tag_bind(self.settings_text, "<Enter>", self.show_dropdown)
         self.canvas.tag_bind(self.settings_text, "<Leave>", self.hide_dropdown_delayed)
         self.dropdown.bind("<Enter>", self.cancel_hide)
         self.dropdown.bind("<Leave>", self.hide_dropdown_delayed)
 
         self._hide_timer = None
-        print("App launched from app.py ✅")
+
+        # Start Session Button (center of sun)
+        self.start_button = tk.Button(self, text="Start Session", font=("Helvetica", 12, "bold"),
+                                      command=self.start_session, bg="white")
+        self.start_button.place(x=450, y=320)
+
+        # Webcam placeholder
+        self.video_frame = tk.Label(self)
+        self.video_frame.place_forget()
+
+        # End Session button
+        self.end_button = tk.Button(self, text="End Session", font=("Helvetica", 10),
+                                    command=self.end_session, bg="white")
+        self.end_button.place_forget()
+
+        # Camera control
+        self.cap = None
+        self.running = False
+
+    def start_session(self):
+        self.start_button.place_forget()
+        self.dropdown.lower()
+
+        # Center video feed in window
+        self.video_frame.place(x=150, y=120, width=700, height=375)
+        self.end_button.place(x=450, y=520)
+
+        self.running = True
+        self.cap = cv2.VideoCapture(0)
+        self.show_frame()
+
+    def show_frame(self):
+        if self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                frame = cv2.flip(frame, 1)
+
+                # Resize the captured frame to fit the display box
+                frame = cv2.resize(frame, (700, 375))  # match the .place() size
+
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame)
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.video_frame.imgtk = imgtk
+                self.video_frame.configure(image=imgtk)
+
+            self.after(10, self.show_frame)
+
+    def end_session(self):
+        self.running = False
+        if self.cap:
+            self.cap.release()
+        self.video_frame.place_forget()
+        self.end_button.place_forget()
+        self.start_button.place(x=450, y=320)
 
     def show_dropdown(self, event=None):
         self.dropdown.lift()
