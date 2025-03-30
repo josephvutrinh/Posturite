@@ -1,6 +1,7 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 import cv2
+from posture_detector import PostureDetector
 
 class PosturiteApp(tk.Tk):
     def __init__(self):
@@ -8,6 +9,8 @@ class PosturiteApp(tk.Tk):
         self.title("Posturite")
         self.geometry("1000x700")
         self.resizable(False, False)
+
+        self.detector = PostureDetector()
 
         # Load and resize background
         self.bg_image = Image.open("Hoohacks-7.jpg").resize((1000, 700))
@@ -65,6 +68,13 @@ class PosturiteApp(tk.Tk):
         self.cap = None
         self.running = False
 
+        # Warning Text Label (Centered)
+        self.warning_label = tk.Label(self, text="", font=("Helvetica", 24, "bold"), fg="white", bg="black")
+        self.warning_label.place(relx=0.5, y=90, anchor="center")
+
+        # Hide initially
+        self.warning_label.place_forget()
+
     def start_session(self):
         self.start_button.place_forget()
         self.dropdown.lower()
@@ -81,18 +91,33 @@ class PosturiteApp(tk.Tk):
         if self.running:
             ret, frame = self.cap.read()
             if ret:
-                frame = cv2.flip(frame, 1)
+                frame = cv2.flip(frame, 1)  # Flip for mirror effect
 
-                # Resize the captured frame to fit the display box
-                frame = cv2.resize(frame, (700, 375))  # match the .place() size
+                # Apply Posture Detection on frame
+                frame = self.detector.findPose(frame)  # Draw pose landmarks
+                lmList = self.detector.findPosition(frame)  # Get positions
 
+                # Detect if user has forward head posture
+                if self.detector.detectForwardHead(lmList):
+                    warning_text = "⚠️ Forward Head Detected!"
+                    self.warning_label.config(text=warning_text, fg="red")
+                else:
+                    self.warning_label.config(text="Good Posture", fg="green")
+
+                self.warning_label.place(relx=0.5, y=90, anchor="center")
+                self.warning_label.update_idletasks()
+
+                # Convert processed frame for Tkinter
+                frame = cv2.resize(frame, (700, 375))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
                 imgtk = ImageTk.PhotoImage(image=img)
+
+                # Update Tkinter video display
                 self.video_frame.imgtk = imgtk
                 self.video_frame.configure(image=imgtk)
 
-            self.after(10, self.show_frame)
+        self.after(10, self.show_frame)  # Refresh frame every 10ms
 
     def end_session(self):
         self.running = False
@@ -101,6 +126,9 @@ class PosturiteApp(tk.Tk):
         self.video_frame.place_forget()
         self.end_button.place_forget()
         self.start_button.place(x=450, y=320)
+
+        self.warning_label.config(text="")
+        self.warning_label.place_forget()
 
     def show_dropdown(self, event=None):
         self.dropdown.lift()
