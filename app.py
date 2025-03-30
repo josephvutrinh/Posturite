@@ -47,10 +47,14 @@ class PosturiteApp(tk.Tk):
 
         self._hide_timer = None
 
-        # Start Session Button (center of sun)
-        self.start_button = tk.Button(self, text="Start Session", font=("Helvetica", 12, "bold"),
-                                      command=self.start_session, bg="white")
-        self.start_button.place(x=450, y=320)
+        # Rounded rectangle button with text
+        self.start_button_shape = self.create_rounded_rect(400, 200, 600, 240, radius=20,
+                                                           fill="#c0392b", outline="")
+        self.start_button_text = self.canvas.create_text(500, 220, text="Start Session", fill="white",
+                                                         font=("Helvetica", 12, "bold"), anchor="center")
+
+        self.canvas.tag_bind(self.start_button_shape, "<Button-1>", lambda e: self.start_session())
+        self.canvas.tag_bind(self.start_button_text, "<Button-1>", lambda e: self.start_session())
 
         # Webcam placeholder
         self.video_frame = tk.Label(self)
@@ -65,11 +69,28 @@ class PosturiteApp(tk.Tk):
         self.cap = None
         self.running = False
 
+    def create_rounded_rect(self, x1, y1, x2, y2, radius=20, **kwargs):
+        points = [
+            x1 + radius, y1,
+            x2 - radius, y1,
+            x2, y1,
+            x2, y1 + radius,
+            x2, y2 - radius,
+            x2, y2,
+            x2 - radius, y2,
+            x1 + radius, y2,
+            x1, y2,
+            x1, y2 - radius,
+            x1, y1 + radius,
+            x1, y1
+        ]
+        return self.canvas.create_polygon(points, smooth=True, splinesteps=36, **kwargs)
+
     def start_session(self):
-        self.start_button.place_forget()
+        self.canvas.itemconfig(self.start_button_shape, state="hidden")
+        self.canvas.itemconfig(self.start_button_text, state="hidden")
         self.dropdown.lower()
 
-        # Center video feed in window
         self.video_frame.place(x=150, y=120, width=700, height=375)
         self.end_button.place(x=450, y=520)
 
@@ -82,10 +103,7 @@ class PosturiteApp(tk.Tk):
             ret, frame = self.cap.read()
             if ret:
                 frame = cv2.flip(frame, 1)
-
-                # Resize the captured frame to fit the display box
-                frame = cv2.resize(frame, (700, 375))  # match the .place() size
-
+                frame = cv2.resize(frame, (700, 375))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
                 imgtk = ImageTk.PhotoImage(image=img)
@@ -100,7 +118,8 @@ class PosturiteApp(tk.Tk):
             self.cap.release()
         self.video_frame.place_forget()
         self.end_button.place_forget()
-        self.start_button.place(x=450, y=320)
+        self.canvas.itemconfig(self.start_button_shape, state="normal")
+        self.canvas.itemconfig(self.start_button_text, state="normal")
 
     def show_dropdown(self, event=None):
         self.dropdown.lift()
