@@ -24,7 +24,7 @@ class PosturiteApp(tk.Tk):
         self.canvas.pack()
 
         # Load and place logo image (replaces canvas title)
-        self.logo_image = Image.open("IMG_A60BCABA778B-1.jpeg").resize((180, 60))  # adjust size if needed
+        self.logo_image = Image.open("IMG_A60BCABA778B-1.jpeg").resize((120, 25))  # adjust size if needed
         self.logo_photo = ImageTk.PhotoImage(self.logo_image)
         self.canvas.create_image(40, 25, anchor="nw", image=self.logo_photo)
 
