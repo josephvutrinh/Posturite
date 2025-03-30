@@ -23,9 +23,10 @@ class PosturiteApp(tk.Tk):
         self.canvas_bg = self.canvas.create_image(0, 0, anchor="nw", image=self.bg_photo)
         self.canvas.pack()
 
-        # Title
-        self.title_text = self.canvas.create_text(40, 35, text="Posturite", fill="white",
-                                                  font=("Helvetica", 20, "bold"), anchor="w")
+        # Load and place logo image (replaces canvas title)
+        self.logo_image = Image.open("IMG_A60BCABA778B-1.jpeg").resize((180, 60))  # adjust size if needed
+        self.logo_photo = ImageTk.PhotoImage(self.logo_image)
+        self.canvas.create_image(40, 25, anchor="nw", image=self.logo_photo)
 
         # Start button
         self.start_button_shape = self.create_rounded_rect(400, 200, 600, 240, radius=20, fill="#c0392b", outline="")
