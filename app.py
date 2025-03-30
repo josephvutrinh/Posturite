@@ -1,5 +1,5 @@
 import tkinter as tk
-from PIL import Image, ImageTk, ImageDraw
+from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import cv2
 
 class PosturiteApp(tk.Tk):
@@ -11,19 +11,22 @@ class PosturiteApp(tk.Tk):
 
         # Load and resize background
         self.bg_image = Image.open("Hoohacks-7.jpg").resize((1000, 700))
+        self.bg_blurred = self.bg_image.filter(ImageFilter.GaussianBlur(8))  # Blur effect
         self.bg_photo = ImageTk.PhotoImage(self.bg_image)
+        self.bg_blurred_photo = ImageTk.PhotoImage(self.bg_blurred)
 
         # Canvas
         self.canvas = tk.Canvas(self, width=1000, height=700, highlightthickness=0)
         self.canvas_bg = self.canvas.create_image(0, 0, anchor="nw", image=self.bg_photo)
         self.canvas.pack()
 
-        # Title (top-left)
-        self.title_text = self.canvas.create_text(40, 35, text="Posturite", fill="white",
-                                                  font=("Helvetica", 20, "bold"), anchor="w")
+        # Load and place logo image (replaces canvas title)
+        self.logo_image = Image.open("IMG_A60BCABA778B-1.jpeg").resize((180, 60))  # adjust size if needed
+        self.logo_photo = ImageTk.PhotoImage(self.logo_image)
+        self.canvas.create_image(40, 25, anchor="nw", image=self.logo_photo)
 
         # Settings (top-right)
-        self.settings_text = self.canvas.create_text(920, 35, text="Settings", fill="white",
+        self.settings_text = self.canvas.create_text(900, 60, text="Settings", fill="white",
                                                      font=("Helvetica", 14, "bold"), anchor="w")
 
         # Dropdown menu for Settings
@@ -56,14 +59,20 @@ class PosturiteApp(tk.Tk):
         self.canvas.tag_bind(self.start_button_shape, "<Button-1>", lambda e: self.start_session())
         self.canvas.tag_bind(self.start_button_text, "<Button-1>", lambda e: self.start_session())
 
-        # Camera feed as canvas image (instead of Label)
-        self.video_image_id = None  # Will store canvas image ID
-        self.video_frame_imgtk = None  # To prevent garbage collection
+        # Camera feed as canvas image
+        self.video_image_id = None
+        self.video_frame_imgtk = None
 
-        # End Session button
-        self.end_button = tk.Button(self, text="End Session", font=("Helvetica", 10),
-                                    command=self.end_session, bg="white")
-        self.end_button.place_forget()
+        # Rounded "End Session" button
+        self.end_button_shape = self.create_rounded_rect(400, 500, 600, 540, radius=20,
+                                                         fill="#c0392b", outline="")
+        self.end_button_text = self.canvas.create_text(500, 520, text="End Session", fill="white",
+                                                       font=("Helvetica", 12, "bold"), anchor="center")
+
+        self.canvas.tag_bind(self.end_button_shape, "<Button-1>", lambda e: self.end_session())
+        self.canvas.tag_bind(self.end_button_text, "<Button-1>", lambda e: self.end_session())
+        self.canvas.itemconfig(self.end_button_shape, state="hidden")
+        self.canvas.itemconfig(self.end_button_text, state="hidden")
 
         # Camera control
         self.cap = None
@@ -87,11 +96,18 @@ class PosturiteApp(tk.Tk):
         return self.canvas.create_polygon(points, smooth=True, splinesteps=36, **kwargs)
 
     def start_session(self):
+        # Hide start button
         self.canvas.itemconfig(self.start_button_shape, state="hidden")
         self.canvas.itemconfig(self.start_button_text, state="hidden")
         self.dropdown.lower()
 
-        self.end_button.place(x=450, y=470)
+        # Blur background
+        self.canvas.itemconfig(self.canvas_bg, image=self.bg_blurred_photo)
+
+        # Show end button
+        self.canvas.itemconfig(self.end_button_shape, state="normal")
+        self.canvas.itemconfig(self.end_button_text, state="normal")
+
         self.running = True
         self.cap = cv2.VideoCapture(0)
         self.show_frame()
@@ -101,7 +117,7 @@ class PosturiteApp(tk.Tk):
             ret, frame = self.cap.read()
             if ret:
                 frame = cv2.flip(frame, 1)
-                frame = cv2.resize(frame, (700, 375))
+                frame = cv2.resize(frame, (700, 400))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
                 rounded = self.add_rounded_corners(img, radius=25)
@@ -112,7 +128,6 @@ class PosturiteApp(tk.Tk):
                 if self.video_image_id:
                     self.canvas.itemconfig(self.video_image_id, image=imgtk)
                 else:
-                    # Display at center
                     self.video_image_id = self.canvas.create_image(500, 250, image=imgtk)
 
             self.after(10, self.show_frame)
@@ -121,9 +136,17 @@ class PosturiteApp(tk.Tk):
         self.running = False
         if self.cap:
             self.cap.release()
+
+        # Remove camera feed
         self.canvas.delete(self.video_image_id)
         self.video_image_id = None
-        self.end_button.place_forget()
+
+        # Restore background
+        self.canvas.itemconfig(self.canvas_bg, image=self.bg_photo)
+
+        # Hide end button, show start
+        self.canvas.itemconfig(self.end_button_shape, state="hidden")
+        self.canvas.itemconfig(self.end_button_text, state="hidden")
         self.canvas.itemconfig(self.start_button_shape, state="normal")
         self.canvas.itemconfig(self.start_button_text, state="normal")
 
