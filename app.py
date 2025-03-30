@@ -110,6 +110,24 @@ class PosturiteApp(tk.Tk):
         if self.running:
             ret, frame = self.cap.read()
             if ret:
+                frame = cv2.flip(frame, 1)  # Flip for mirror effect
+
+                # Apply Posture Detection on frame
+                frame = self.detector.findPose(frame)  # Draw pose landmarks
+                lmList = self.detector.findPosition(frame)  # Get positions
+
+                # Detect if user has forward head posture
+                if self.detector.detectForwardHead(lmList):
+                    warning_text = "⚠️ Forward Head Detected!"
+                    self.warning_label.config(text=warning_text, fg="red")
+                else:
+                    self.warning_label.config(text="Good Posture", fg="green")
+
+                self.warning_label.place(relx=0.5, y=90, anchor="center")
+                self.warning_label.update_idletasks()
+
+                # Convert processed frame for Tkinter
+                frame = cv2.resize(frame, (700, 375))
                 frame = cv2.flip(frame, 1)
                 frame = cv2.resize(frame, (700, 375))
                 frame = cv2.flip(frame, 1)  # Flip for mirror effect
@@ -132,6 +150,11 @@ class PosturiteApp(tk.Tk):
                 frame = cv2.resize(frame, (700, 375))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
+                imgtk = ImageTk.PhotoImage(image=img)
+
+                # Update Tkinter video display
+                self.video_frame.imgtk = imgtk
+                self.video_frame.configure(image=imgtk)
                 rounded = self.add_rounded_corners(img, radius=25)
 
                 imgtk = ImageTk.PhotoImage(image=rounded)
@@ -143,7 +166,7 @@ class PosturiteApp(tk.Tk):
                     # Display at center
                     self.video_image_id = self.canvas.create_image(500, 250, image=imgtk)
 
-            self.after(10, self.show_frame)
+        self.after(10, self.show_frame)  # Refresh frame every 10ms
 
     def end_session(self):
         self.running = False
