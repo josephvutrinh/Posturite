@@ -1,5 +1,5 @@
 import tkinter as tk
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 import cv2
 from posture_detector import PostureDetector
 
@@ -50,7 +50,7 @@ class PosturiteApp(tk.Tk):
 
         self._hide_timer = None
 
-        # Rounded rectangle button with text
+        # Rounded "Start Session" button with text
         self.start_button_shape = self.create_rounded_rect(400, 200, 600, 240, radius=20,
                                                            fill="#c0392b", outline="")
         self.start_button_text = self.canvas.create_text(500, 220, text="Start Session", fill="white",
@@ -59,9 +59,9 @@ class PosturiteApp(tk.Tk):
         self.canvas.tag_bind(self.start_button_shape, "<Button-1>", lambda e: self.start_session())
         self.canvas.tag_bind(self.start_button_text, "<Button-1>", lambda e: self.start_session())
 
-        # Webcam placeholder
-        self.video_frame = tk.Label(self)
-        self.video_frame.place_forget()
+        # Camera feed as canvas image (instead of Label)
+        self.video_image_id = None  # Will store canvas image ID
+        self.video_frame_imgtk = None  # To prevent garbage collection
 
         # End Session button
         self.end_button = tk.Button(self, text="End Session", font=("Helvetica", 10),
@@ -101,9 +101,7 @@ class PosturiteApp(tk.Tk):
         self.canvas.itemconfig(self.start_button_text, state="hidden")
         self.dropdown.lower()
 
-        self.video_frame.place(x=150, y=120, width=700, height=375)
-        self.end_button.place(x=450, y=520)
-
+        self.end_button.place(x=450, y=470)
         self.running = True
         self.cap = cv2.VideoCapture(0)
         self.show_frame()
@@ -134,9 +132,16 @@ class PosturiteApp(tk.Tk):
                 frame = cv2.resize(frame, (700, 375))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
-                imgtk = ImageTk.PhotoImage(image=img)
-                self.video_frame.imgtk = imgtk
-                self.video_frame.configure(image=imgtk)
+                rounded = self.add_rounded_corners(img, radius=25)
+
+                imgtk = ImageTk.PhotoImage(image=rounded)
+                self.video_frame_imgtk = imgtk
+
+                if self.video_image_id:
+                    self.canvas.itemconfig(self.video_image_id, image=imgtk)
+                else:
+                    # Display at center
+                    self.video_image_id = self.canvas.create_image(500, 250, image=imgtk)
 
             self.after(10, self.show_frame)
 
@@ -144,7 +149,8 @@ class PosturiteApp(tk.Tk):
         self.running = False
         if self.cap:
             self.cap.release()
-        self.video_frame.place_forget()
+        self.canvas.delete(self.video_image_id)
+        self.video_image_id = None
         self.end_button.place_forget()
         self.canvas.itemconfig(self.start_button_shape, state="normal")
         self.canvas.itemconfig(self.start_button_text, state="normal")
@@ -172,6 +178,17 @@ class PosturiteApp(tk.Tk):
     def on_lockdown_toggle(self):
         state = self.lockdown_var.get()
         print("Lockdown Mode is", "ON" if state else "OFF")
+
+    def add_rounded_corners(self, img, radius):
+        # Create rounded rectangle mask
+        mask = Image.new("L", img.size, 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle([(0, 0), img.size], radius=radius, fill=255)
+
+        img = img.convert("RGBA")
+        img.putalpha(mask)
+        return img
+
 
 if __name__ == "__main__":
     app = PosturiteApp()
