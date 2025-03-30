@@ -1,6 +1,7 @@
 import tkinter as tk
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import cv2
+from posture_detector import PostureDetector
 
 class PosturiteApp(tk.Tk):
     def __init__(self):
@@ -9,119 +10,170 @@ class PosturiteApp(tk.Tk):
         self.geometry("1000x700")
         self.resizable(False, False)
 
+        self.detector = PostureDetector()  # Posture detection module
+
         # Load and resize background
         self.bg_image = Image.open("Hoohacks-7.jpg").resize((1000, 700))
+        self.bg_blurred = self.bg_image.filter(ImageFilter.GaussianBlur(8))  # Apply blur effect
         self.bg_photo = ImageTk.PhotoImage(self.bg_image)
+        self.bg_blurred_photo = ImageTk.PhotoImage(self.bg_blurred)
 
         # Canvas
         self.canvas = tk.Canvas(self, width=1000, height=700, highlightthickness=0)
         self.canvas_bg = self.canvas.create_image(0, 0, anchor="nw", image=self.bg_photo)
         self.canvas.pack()
 
-        # Title (top-left)
-        self.title_text = self.canvas.create_text(40, 35, text="Posturite", fill="white",
-                                                  font=("Helvetica", 20, "bold"), anchor="w")
+        # Load and place logo image (replaces canvas title)
+        self.logo_image = Image.open("IMG_A60BCABA778B-1.jpeg").resize((180, 60))  # adjust size if needed
+        self.logo_photo = ImageTk.PhotoImage(self.logo_image)
+        self.canvas.create_image(40, 25, anchor="nw", image=self.logo_photo)
 
-        # Settings (top-right)
-        self.settings_text = self.canvas.create_text(920, 35, text="Settings", fill="white",
-                                                     font=("Helvetica", 14, "bold"), anchor="w")
+        # Start button
+        self.start_button_shape = self.create_rounded_rect(400, 200, 600, 240, radius=20, fill="#c0392b", outline="")
+        self.start_button_text = self.canvas.create_text(500, 220, text="Start Session", fill="white",
+                                                         font=("Helvetica", 12, "bold"), anchor="center")
 
-        # Dropdown menu for Settings
-        self.dropdown = tk.Frame(self, bg="#1e1e1e", highlightbackground="white", highlightthickness=1)
-        self.dropdown.place(x=850, y=50, width=130, height=60)
-        self.dropdown.lower()
+        self.canvas.tag_bind(self.start_button_shape, "<Button-1>", lambda e: self.start_session())
+        self.canvas.tag_bind(self.start_button_text, "<Button-1>", lambda e: self.start_session())
 
-        self.lockdown_var = tk.BooleanVar()
-        label = tk.Label(self.dropdown, text="Lockdown Mode", bg="#1e1e1e", fg="white", font=("Helvetica", 10))
-        label.pack(side="left", padx=(10, 5), pady=10)
+        # End Button
+        self.end_button_shape = self.create_rounded_rect(400, 500, 600, 540, radius=20, fill="#c0392b", outline="")
+        self.end_button_text = self.canvas.create_text(500, 520, text="End Session", fill="white",
+                                                       font=("Helvetica", 12, "bold"), anchor="center")
 
-        self.toggle = tk.Checkbutton(self.dropdown, variable=self.lockdown_var, bg="#1e1e1e",
-                                     activebackground="#1e1e1e", fg="white", selectcolor="#1e1e1e",
-                                     highlightthickness=0, bd=0, command=self.on_lockdown_toggle)
-        self.toggle.pack(side="right", padx=(5, 10))
+        self.canvas.tag_bind(self.end_button_shape, "<Button-1>", lambda e: self.end_session())
+        self.canvas.tag_bind(self.end_button_text, "<Button-1>", lambda e: self.end_session())
 
-        self.canvas.tag_bind(self.settings_text, "<Enter>", self.show_dropdown)
-        self.canvas.tag_bind(self.settings_text, "<Leave>", self.hide_dropdown_delayed)
-        self.dropdown.bind("<Enter>", self.cancel_hide)
-        self.dropdown.bind("<Leave>", self.hide_dropdown_delayed)
+        # Hides the end session button initially
+        self.canvas.itemconfig(self.end_button_shape, state="hidden")
+        self.canvas.itemconfig(self.end_button_text, state="hidden")
 
-        self._hide_timer = None
+        # Camera feed (Canvas Image)
+        self.video_image_id = None  # Assigned later
 
-        # Start Session Button (center of sun)
-        self.start_button = tk.Button(self, text="Start Session", font=("Helvetica", 12, "bold"),
-                                      command=self.start_session, bg="white")
-        self.start_button.place(x=450, y=320)
-
-        # Webcam placeholder
-        self.video_frame = tk.Label(self)
-        self.video_frame.place_forget()
-
-        # End Session button
-        self.end_button = tk.Button(self, text="End Session", font=("Helvetica", 10),
-                                    command=self.end_session, bg="white")
-        self.end_button.place_forget()
+        # Warning Label (For posture detection alerts)
+        self.warning_label = tk.Label(self, text="", font=("Helvetica", 24, "bold"), fg="white", bg="black")
+        self.warning_label.place(relx=0.5, y=90, anchor="center")
+        self.warning_label.place_forget()  # Hide initially
 
         # Camera control
         self.cap = None
         self.running = False
 
+    def create_rounded_rect(self, x1, y1, x2, y2, radius=20, **kwargs):
+        """ Creates a rounded rectangle shape on the canvas """
+        points = [
+            x1 + radius, y1,
+            x2 - radius, y1,
+            x2, y1,
+            x2, y1 + radius,
+            x2, y2 - radius,
+            x2, y2,
+            x2 - radius, y2,
+            x1 + radius, y2,
+            x1, y2,
+            x1, y2 - radius,
+            x1, y1 + radius,
+            x1, y1
+        ]
+        return self.canvas.create_polygon(points, smooth=True, splinesteps=36, **kwargs)
+
     def start_session(self):
-        self.start_button.place_forget()
-        self.dropdown.lower()
+        """ Start the posture detection session """
+        # Hide start button
+        self.canvas.itemconfig(self.start_button_shape, state="hidden")
+        self.canvas.itemconfig(self.start_button_text, state="hidden")
 
-        # Center video feed in window
-        self.video_frame.place(x=150, y=120, width=700, height=375)
-        self.end_button.place(x=450, y=520)
+        # Blur background
+        self.canvas.itemconfig(self.canvas_bg, image=self.bg_blurred_photo)
 
+        # Show End Session button
+        self.canvas.itemconfig(self.end_button_shape, state="normal")
+        self.canvas.itemconfig(self.end_button_text, state="normal")
+
+        # Start camera
         self.running = True
         self.cap = cv2.VideoCapture(0)
         self.show_frame()
 
     def show_frame(self):
+        """ Capture and display video frames with posture detection and rounded corners """
         if self.running:
             ret, frame = self.cap.read()
             if ret:
-                frame = cv2.flip(frame, 1)
+                frame = cv2.flip(frame, 1)  # Flip for mirror effect
 
-                # Resize the captured frame to fit the display box
-                frame = cv2.resize(frame, (700, 375))  # match the .place() size
+                # Apply Posture Detection
+                frame = self.detector.findPose(frame)  # Draw pose landmarks
+                lmList = self.detector.findPosition(frame)  # Get positions
 
+                # Detect Forward Head Posture
+                if self.detector.detectForwardHead(lmList):
+                    warning_text = "⚠️ Forward Head Detected!"
+                    self.warning_label.config(text=warning_text, fg="red")
+                    self.warning_label.place(relx=0.5, y=90, anchor="center")
+                else:
+                    self.warning_label.config(text="Good Posture", fg="green")
+                    self.warning_label.place(relx=0.5, y=90, anchor="center")
+
+                self.warning_label.update_idletasks()
+
+                # Convert frame for display
+                frame = cv2.resize(frame, (700, 400))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
-                imgtk = ImageTk.PhotoImage(image=img)
-                self.video_frame.imgtk = imgtk
-                self.video_frame.configure(image=imgtk)
 
-            self.after(10, self.show_frame)
+                # Apply rounded corners
+                rounded = self.add_rounded_corners(img, radius=25)
+
+                imgtk = ImageTk.PhotoImage(image=rounded)
+
+                if self.video_image_id:
+                    self.canvas.itemconfig(self.video_image_id, image=imgtk)
+                else:
+                    self.video_image_id = self.canvas.create_image(500, 250, image=imgtk)
+
+                self.video_frame_imgtk = imgtk  # Store reference to prevent garbage collection
+
+            self.after(10, self.show_frame)  # Refresh frame every 10ms
 
     def end_session(self):
+        """ End the session and reset UI """
         self.running = False
         if self.cap:
             self.cap.release()
-        self.video_frame.place_forget()
-        self.end_button.place_forget()
-        self.start_button.place(x=450, y=320)
 
-    def show_dropdown(self, event=None):
-        self.dropdown.lift()
-        self.dropdown.place(x=850, y=50)
+        # Remove camera feed
+        self.canvas.delete(self.video_image_id)
+        self.video_image_id = None
 
-    def hide_dropdown_delayed(self, event=None):
-        if self._hide_timer:
-            self.after_cancel(self._hide_timer)
-        self._hide_timer = self.after(300, self.hide_dropdown)
+        # Restore normal background
+        self.canvas.itemconfig(self.canvas_bg, image=self.bg_photo)
 
-    def cancel_hide(self, event=None):
-        if self._hide_timer:
-            self.after_cancel(self._hide_timer)
-            self._hide_timer = None
+        # Hide End Session button, show Start button
+        self.canvas.itemconfig(self.end_button_shape, state="hidden")
+        self.canvas.itemconfig(self.end_button_text, state="hidden")
+        self.canvas.itemconfig(self.start_button_shape, state="normal")
+        self.canvas.itemconfig(self.start_button_text, state="normal")
 
-    def hide_dropdown(self):
-        self.dropdown.lower()
+        # Hide warning label
+        self.warning_label.config(text="")
+        self.warning_label.place_forget()
 
-    def on_lockdown_toggle(self):
-        state = self.lockdown_var.get()
-        print("Lockdown Mode is", "ON" if state else "OFF")
+    def add_rounded_corners(self, img, radius):
+        """ Apply rounded corners to the camera feed """
+        mask = Image.new("L", img.size, 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle([(0, 0), img.size], radius=radius, fill=255)
+
+        img = img.convert("RGBA")
+        img.putalpha(mask)
+
+        # Create a solid background matching UI theme
+        bg = Image.new("RGBA", img.size, (30, 30, 30, 255))
+        rounded = Image.composite(img, bg, mask)
+
+        return rounded.convert("RGB")  # Remove transparency for Tkinter compatibility
 
 if __name__ == "__main__":
     app = PosturiteApp()
