@@ -50,18 +50,14 @@ class PosturiteApp(tk.Tk):
 
         self._hide_timer = None
 
-        # Rounded "Start Session" button with text
-        self.start_button_shape = self.create_rounded_rect(400, 200, 600, 240, radius=20,
-                                                           fill="#c0392b", outline="")
-        self.start_button_text = self.canvas.create_text(500, 220, text="Start Session", fill="white",
-                                                         font=("Helvetica", 12, "bold"), anchor="center")
+        # Start Session Button (center of sun)
+        self.start_button = tk.Button(self, text="Start Session", font=("Helvetica", 12, "bold"),
+                                      command=self.start_session, bg="white")
+        self.start_button.place(x=450, y=320)
 
-        self.canvas.tag_bind(self.start_button_shape, "<Button-1>", lambda e: self.start_session())
-        self.canvas.tag_bind(self.start_button_text, "<Button-1>", lambda e: self.start_session())
-
-        # Camera feed as canvas image (instead of Label)
-        self.video_image_id = None  # Will store canvas image ID
-        self.video_frame_imgtk = None  # To prevent garbage collection
+        # Webcam placeholder
+        self.video_frame = tk.Label(self)
+        self.video_frame.place_forget()
 
         # End Session button
         self.end_button = tk.Button(self, text="End Session", font=("Helvetica", 10),
@@ -72,23 +68,6 @@ class PosturiteApp(tk.Tk):
         self.cap = None
         self.running = False
 
-    def create_rounded_rect(self, x1, y1, x2, y2, radius=20, **kwargs):
-        points = [
-            x1 + radius, y1,
-            x2 - radius, y1,
-            x2, y1,
-            x2, y1 + radius,
-            x2, y2 - radius,
-            x2, y2,
-            x2 - radius, y2,
-            x1 + radius, y2,
-            x1, y2,
-            x1, y2 - radius,
-            x1, y1 + radius,
-            x1, y1
-        ]
-        return self.canvas.create_polygon(points, smooth=True, splinesteps=36, **kwargs)
-
         # Warning Text Label (Centered)
         self.warning_label = tk.Label(self, text="", font=("Helvetica", 24, "bold"), fg="white", bg="black")
         self.warning_label.place(relx=0.5, y=90, anchor="center")
@@ -97,11 +76,13 @@ class PosturiteApp(tk.Tk):
         self.warning_label.place_forget()
 
     def start_session(self):
-        self.canvas.itemconfig(self.start_button_shape, state="hidden")
-        self.canvas.itemconfig(self.start_button_text, state="hidden")
+        self.start_button.place_forget()
         self.dropdown.lower()
 
-        self.end_button.place(x=450, y=470)
+        # Center video feed in window
+        self.video_frame.place(x=150, y=120, width=700, height=375)
+        self.end_button.place(x=450, y=520)
+
         self.running = True
         self.cap = cv2.VideoCapture(0)
         self.show_frame()
@@ -128,26 +109,6 @@ class PosturiteApp(tk.Tk):
 
                 # Convert processed frame for Tkinter
                 frame = cv2.resize(frame, (700, 375))
-                frame = cv2.flip(frame, 1)
-                frame = cv2.resize(frame, (700, 375))
-                frame = cv2.flip(frame, 1)  # Flip for mirror effect
-
-                # Apply Posture Detection on frame
-                frame = self.detector.findPose(frame)  # Draw pose landmarks
-                lmList = self.detector.findPosition(frame)  # Get positions
-
-                # Detect if user has forward head posture
-                if self.detector.detectForwardHead(lmList):
-                    warning_text = "⚠️ Forward Head Detected!"
-                    self.warning_label.config(text=warning_text, fg="red")
-                else:
-                    self.warning_label.config(text="Good Posture", fg="green")
-
-                self.warning_label.place(relx=0.5, y=90, anchor="center")
-                self.warning_label.update_idletasks()
-
-                # Convert processed frame for Tkinter
-                frame = cv2.resize(frame, (700, 375))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
                 imgtk = ImageTk.PhotoImage(image=img)
@@ -155,16 +116,6 @@ class PosturiteApp(tk.Tk):
                 # Update Tkinter video display
                 self.video_frame.imgtk = imgtk
                 self.video_frame.configure(image=imgtk)
-                rounded = self.add_rounded_corners(img, radius=25)
-
-                imgtk = ImageTk.PhotoImage(image=rounded)
-                self.video_frame_imgtk = imgtk
-
-                if self.video_image_id:
-                    self.canvas.itemconfig(self.video_image_id, image=imgtk)
-                else:
-                    # Display at center
-                    self.video_image_id = self.canvas.create_image(500, 250, image=imgtk)
 
         self.after(10, self.show_frame)  # Refresh frame every 10ms
 
@@ -172,11 +123,9 @@ class PosturiteApp(tk.Tk):
         self.running = False
         if self.cap:
             self.cap.release()
-        self.canvas.delete(self.video_image_id)
-        self.video_image_id = None
+        self.video_frame.place_forget()
         self.end_button.place_forget()
-        self.canvas.itemconfig(self.start_button_shape, state="normal")
-        self.canvas.itemconfig(self.start_button_text, state="normal")
+        self.start_button.place(x=450, y=320)
 
         self.warning_label.config(text="")
         self.warning_label.place_forget()
@@ -201,17 +150,6 @@ class PosturiteApp(tk.Tk):
     def on_lockdown_toggle(self):
         state = self.lockdown_var.get()
         print("Lockdown Mode is", "ON" if state else "OFF")
-
-    def add_rounded_corners(self, img, radius):
-        # Create rounded rectangle mask
-        mask = Image.new("L", img.size, 0)
-        draw = ImageDraw.Draw(mask)
-        draw.rounded_rectangle([(0, 0), img.size], radius=radius, fill=255)
-
-        img = img.convert("RGBA")
-        img.putalpha(mask)
-        return img
-
 
 if __name__ == "__main__":
     app = PosturiteApp()
